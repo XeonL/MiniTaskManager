@@ -1,6 +1,13 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-
+QString IsNumberString(QString &str) {
+    for(QChar c : str) {
+        if(!(c >= '0'&&c <= '9')) {
+            return "";
+        }
+    }
+    return str;
+}
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -10,6 +17,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QTimer *timer = new QTimer(this);
     connect(timer,&QTimer::timeout,this,&MainWindow::updateSystemInfo);
     timer->start(1000);
+//    setFixedSize(600,450);
 
 
 
@@ -23,20 +31,87 @@ void MainWindow::initSystemInfo() {
     initBasicInfo();
     initCPUInfo();
     initChart();
+
     updateSystemInfo();
+    updateProcess();
 }
 void MainWindow::updateSystemInfo() {
     updateTimeInfo();
     updateMemInfo();
     updateCPUInfo();
     updateChart();
+    updateProcess();
+}
+void MainWindow::updateProcess() {
+    QDir dir("/proc");
+    QFileInfoList folder_list = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    ui->tableWidget_process->setRowCount(folder_list.size());
+    ui->tableWidget_process->setColumnCount(8);
+    QStringList header;
+    header << "Name" << "Pid" << "State" << "memory" << "ppid" << "gpid" << "nice" << "priority";
+    ui->tableWidget_process->setHorizontalHeaderLabels(header);
+
+
+    ui->tableWidget_process->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->tableWidget_process->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tableWidget_process->verticalHeader()->setVisible(false);
+
+    ui->tableWidget_process->setShowGrid(false);
+    ui->tableWidget_process->resizeColumnsToContents();
+    ui->tableWidget_process->resizeRowsToContents();
+
+
+
+    int num = -1;
+    for(int i = 0; i != folder_list.size(); i++) {
+        QString path = folder_list.at(i).absoluteFilePath();
+        QString pid = IsNumberString(path.split("/proc/")[1]);
+        QString ppid,gpid,nice,priority;
+        QString name,task_state,memory;
+        if(pid != "") {
+            num++;
+            QFile stat(path + "/stat");
+            QFile statm(path + "/statm");
+            if(!stat.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                qDebug() << "Can't open the file!" << endl;
+                return;
+            }
+            if(!statm.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                qDebug() << "Can't open the file!" << endl;
+                return;
+            }
+            QString statLine = stat.readLine();
+            QString statmLine = statm.readLine();
+            memory = statmLine.split(" ")[0];
+            int begin = statLine.split("(")[0].length() + 1;
+            int end = statLine.length() - statLine.split(")")[statLine.split(")").size()-1].length() - begin -1;
+            name = statLine.mid(begin,end);
+            QStringList list = statLine.split(" ");
+            task_state = statLine.mid(begin+end).split(" ")[1];
+
+            ppid = list[3];
+            gpid = list[4];
+            nice = list[18];
+            priority = list[17];
+
+            ui->tableWidget_process->setItem(num,0,new QTableWidgetItem(name));
+            ui->tableWidget_process->setItem(num,1,new QTableWidgetItem(pid));
+            ui->tableWidget_process->setItem(num,2,new QTableWidgetItem(task_state));
+            ui->tableWidget_process->setItem(num,3,new QTableWidgetItem(memory + " Bytes"));
+            ui->tableWidget_process->setItem(num,4,new QTableWidgetItem(ppid));
+            ui->tableWidget_process->setItem(num,5,new QTableWidgetItem(gpid));
+            ui->tableWidget_process->setItem(num,6,new QTableWidgetItem(nice));
+            ui->tableWidget_process->setItem(num,7,new QTableWidgetItem(priority));
+        }
+    }
+    itemNum = num;
+    return;
 }
 void MainWindow::updateChart() {
     series_cpu->clear();
     series_mem->clear();
     series_swap->clear();
     for(int i = 0;i < 120;i++) {
-//        qDebug() << cpu[i]/100 << endl;
         series_cpu->append(i/120.0,cpu[i]/100);
         series_mem->append(i/120.0,mem[i]/100);
         series_swap->append(i/120.0,swap[i]/100);
@@ -227,4 +302,46 @@ void MainWindow::initCPUInfo() {
 void MainWindow::on_pushButton_shutdown_clicked()
 {
     system("shutdown -h 1");
+}
+
+void MainWindow::on_pushButton_Search_clicked()
+{
+    QString keyWords = ui->lineEdit_killProcess->text();
+    if(keyWords == "") {
+        ui->label_search_process_info->setText("Please input process name or pid!");
+        return;
+    }
+    int count = itemNum;
+    for(int i = 0;i <= count;i++) {
+        QString name = ui->tableWidget_process->item(i,0)->text();
+        QString pid = ui->tableWidget_process->item(i,1)->text();
+        if(name == keyWords || pid == keyWords) {
+            waitKillPid = pid;
+            QString info = "";
+            info += "Search Success!\nProcess Name:";
+            info += name + "\nProcess Pid:";
+            info += pid + "\nProcess Memory:";
+            info += ui->tableWidget_process->item(i,3)->text();
+            ui->label_search_process_info->setText(info);
+            ui->pushButton_Kill->setEnabled(true);
+            return;
+        }
+    }
+    qDebug() << "no exist";
+    waitKillPid = "";
+    ui->pushButton_Kill->setEnabled(false);
+    ui->label_search_process_info->setText("Search failed!\nNot Exist!");
+}
+
+void MainWindow::on_pushButton_Kill_clicked()
+{
+    if(waitKillPid == "") {
+        ui->label_search_process_info->setText("Please Search!");
+    } else {
+        QString cmd = "kill ";
+        cmd += waitKillPid;
+        system(cmd.toLatin1().data());
+        ui->label_search_process_info->setText("Killed!");
+    }
+    ui->pushButton_Kill->setEnabled(false);
 }

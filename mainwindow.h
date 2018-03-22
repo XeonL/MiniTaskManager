@@ -13,6 +13,8 @@
 #include <QLineSeries>
 #include <QValueAxis>
 #include <QQueue>
+#include <QDir>
+#include <QFileInfoList>
 using namespace QtCharts;
 namespace Ui {
 class MainWindow;
@@ -36,8 +38,13 @@ private slots:
     void updateCPUInfo();
     void updateMemInfo();
     void updateChart();
+    void updateProcess();
 
     void on_pushButton_shutdown_clicked();
+
+    void on_pushButton_Search_clicked();
+
+    void on_pushButton_Kill_clicked();
 
 private:
     Ui::MainWindow *ui;
@@ -46,6 +53,8 @@ private:
     QLineSeries *series_mem;
     QLineSeries *series_swap;
     QQueue<double> cpu,mem,swap;
+    QString waitKillPid = "";
+    int itemNum = 0;
 };
 
 #endif // MAINWINDOW_H
