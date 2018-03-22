@@ -15,6 +15,7 @@
 #include <QQueue>
 #include <QDir>
 #include <QFileInfoList>
+#include <QProcess>
 using namespace QtCharts;
 namespace Ui {
 class MainWindow;
@@ -45,6 +46,8 @@ private slots:
     void on_pushButton_Search_clicked();
 
     void on_pushButton_Kill_clicked();
+
+    void on_pushButton_create_clicked();
 
 private:
     Ui::MainWindow *ui;

@@ -63,6 +63,7 @@ void MainWindow::updateProcess() {
 
 
     int num = -1;
+    int s = 0,r = 0,z = 0;
     for(int i = 0; i != folder_list.size(); i++) {
         QString path = folder_list.at(i).absoluteFilePath();
         QString pid = IsNumberString(path.split("/proc/")[1]);
@@ -88,7 +89,13 @@ void MainWindow::updateProcess() {
             name = statLine.mid(begin,end);
             QStringList list = statLine.split(" ");
             task_state = statLine.mid(begin+end).split(" ")[1];
-
+            if(task_state == "R") {
+                r++;
+            } else if(task_state == "S") {
+                s++;
+            } else if(task_state == "Z") {
+                z++;
+            }
             ppid = list[3];
             gpid = list[4];
             nice = list[18];
@@ -104,7 +111,11 @@ void MainWindow::updateProcess() {
             ui->tableWidget_process->setItem(num,7,new QTableWidgetItem(priority));
         }
     }
-    itemNum = num;
+    itemNum = num + 1;
+    ui->label_total->setText(QString::number(itemNum,10));
+    ui->label_sleep->setText(QString::number(s,10));
+    ui->label_run->setText(QString::number(r,10));
+    ui->label_zombie->setText(QString::number(z,10));
     return;
 }
 void MainWindow::updateChart() {
@@ -260,8 +271,8 @@ void MainWindow::initChart() {
     ui->verticalLayout_swap->addWidget(chartView3);
     chart3->legend()->hide();
     series_swap = new QLineSeries();
-    QValueAxis * axisX3 = new QValueAxis;
-    QValueAxis * axisY3 = new QValueAxis;
+    QValueAxis * axisX3 = new QValueAxis();
+    QValueAxis * axisY3 = new QValueAxis();
     axisX3->setRange(0,120);
     axisX3->setTitleText("Time(s)");
     axisY3->setRange(0,100);
@@ -311,7 +322,7 @@ void MainWindow::on_pushButton_Search_clicked()
         ui->label_search_process_info->setText("Please input process name or pid!");
         return;
     }
-    int count = itemNum;
+    int count = itemNum - 1;
     for(int i = 0;i <= count;i++) {
         QString name = ui->tableWidget_process->item(i,0)->text();
         QString pid = ui->tableWidget_process->item(i,1)->text();
@@ -344,4 +355,10 @@ void MainWindow::on_pushButton_Kill_clicked()
         ui->label_search_process_info->setText("Killed!");
     }
     ui->pushButton_Kill->setEnabled(false);
+}
+
+void MainWindow::on_pushButton_create_clicked()
+{
+    QProcess *pro = new QProcess(this);
+    pro->start("gedit",NULL);
 }
