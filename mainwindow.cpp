@@ -10,6 +10,9 @@ MainWindow::MainWindow(QWidget *parent) :
     QTimer *timer = new QTimer(this);
     connect(timer,&QTimer::timeout,this,&MainWindow::updateSystemInfo);
     timer->start(1000);
+
+
+
 }
 
 MainWindow::~MainWindow()
@@ -19,12 +22,25 @@ MainWindow::~MainWindow()
 void MainWindow::initSystemInfo() {
     initBasicInfo();
     initCPUInfo();
+    initChart();
     updateSystemInfo();
 }
 void MainWindow::updateSystemInfo() {
     updateTimeInfo();
     updateMemInfo();
     updateCPUInfo();
+    updateChart();
+}
+void MainWindow::updateChart() {
+    series_cpu->clear();
+    series_mem->clear();
+    series_swap->clear();
+    for(int i = 0;i < 120;i++) {
+//        qDebug() << cpu[i]/100 << endl;
+        series_cpu->append(i/120.0,cpu[i]/100);
+        series_mem->append(i/120.0,mem[i]/100);
+        series_swap->append(i/120.0,swap[i]/100);
+    }
 }
 void MainWindow::updateTimeInfo() {
 
@@ -66,6 +82,12 @@ void MainWindow::updateCPUInfo() {
         result = "43.51 ";
     }
     ui->label_cpuusage->setText(result+"%");
+    cpu.dequeue();
+    if(cpuUsage) {
+        cpu.enqueue(cpuUsage);
+    } else {
+        cpu.enqueue(43.51);
+    }
 }
 void MainWindow::updateMemInfo() {
     QFile file_meminfo("/proc/meminfo");
@@ -74,20 +96,31 @@ void MainWindow::updateMemInfo() {
         return;
     }
     int i = 0;
+    double totalmem,availmem,swaptotal,swapfree;
     do {
         i++;
         QByteArray line = file_meminfo.readLine();
         QString str(line);
         if(i == 1) {
-            ui->label_memtotal->setText(QString::number(str.split(" ")[8].toDouble()/(1024*1024),10,4) + " GBytes");
+            totalmem = str.split(":")[1].split(" kB")[0].simplified().toDouble()/(1024*1024);
+            ui->label_memtotal->setText(QString::number(totalmem,10,4) + " GBytes");
         } else if(i == 2) {
-            ui->label_memfree->setText(QString::number(str.split(" ")[10].toDouble()/(1024*1024),10,4) + " GBytes");
+            ui->label_memfree->setText(QString::number(str.split(":")[1].split(" kB")[0].simplified().toDouble()/(1024*1024),10,4) + " GBytes");
         } else if(i == 3) {
-            ui->label_memavailable->setText(QString::number(str.split(" ")[4].toDouble()/(1024*1024),10,4) + " GBytes");
+            availmem = str.split(":")[1].split(" kB")[0].simplified().toDouble()/(1024*1024);
+            ui->label_memavailable->setText(QString::number(availmem,10,4) + " GBytes");
         } else if(i == 6) {
-            ui->label_swapcached->setText(str.split(" ")[12] + " KBytes");
+            ui->label_swapcached->setText(str.split(":")[1].split(" kB")[0].simplified() + " KBytes");
+        } else if(i == 15) {
+            swaptotal = str.split(":")[1].split(" kB")[0].simplified().toDouble();
+        } else if(i == 16) {
+            swapfree = str.split(":")[1].split(" kB")[0].simplified().toDouble();
         }
-    } while(!file_meminfo.atEnd()&&i != 6);
+    } while(!file_meminfo.atEnd()&&i != 16);
+    mem.dequeue();
+    mem.enqueue((totalmem - availmem)/totalmem*100);
+    swap.dequeue();
+    swap.enqueue((swaptotal - swapfree)/swaptotal*100);
 }
 void MainWindow::initBasicInfo() {
     QFile file_system("/etc/issue");
@@ -110,6 +143,59 @@ void MainWindow::initBasicInfo() {
     list = str.split(" ");
     result = list[0] + " " + list[1] + " " + list[2];
     ui->label_kernel->setText(result);
+}
+void MainWindow::initChart() {
+    for(int i = 0;i < 120;i++) {
+        cpu.enqueue(0);
+        mem.enqueue(0);
+        swap.enqueue(0);
+    }
+    QChartView *chartView = new QChartView(this);
+    QChart *chart = chartView->chart();
+    ui->verticalLayout_cpu->addWidget(chartView);
+    chart->legend()->hide();
+    series_cpu = new QLineSeries();
+    QValueAxis * axisX = new QValueAxis;
+    QValueAxis * axisY = new QValueAxis;
+    axisX->setRange(0,120);
+    axisX->setTitleText("Time(s)");
+    axisY->setRange(0,100);
+    axisY->setTitleText("CpuUsage(%)");
+    chart->addAxis(axisX, Qt::AlignBottom);
+    chart->addAxis(axisY, Qt::AlignLeft);
+    chart->addSeries(series_cpu);
+
+    QChartView *chartView2 = new QChartView(this);
+    QChart *chart2 = chartView2->chart();
+    ui->verticalLayout_mem->addWidget(chartView2);
+    chart2->legend()->hide();
+    series_mem = new QLineSeries();
+    QValueAxis * axisX2 = new QValueAxis;
+    QValueAxis * axisY2 = new QValueAxis;
+    axisX2->setRange(0,120);
+    axisX2->setTitleText("Time(s)");
+    axisY2->setRange(0,100);
+    axisY2->setTitleText("MemUsage(%)");
+    chart2->addAxis(axisX2, Qt::AlignBottom);
+    chart2->addAxis(axisY2, Qt::AlignLeft);
+    chart2->addSeries(series_mem);
+
+    QChartView *chartView3 = new QChartView(this);
+    QChart *chart3 = chartView3->chart();
+    ui->verticalLayout_swap->addWidget(chartView3);
+    chart3->legend()->hide();
+    series_swap = new QLineSeries();
+    QValueAxis * axisX3 = new QValueAxis;
+    QValueAxis * axisY3 = new QValueAxis;
+    axisX3->setRange(0,120);
+    axisX3->setTitleText("Time(s)");
+    axisY3->setRange(0,100);
+    axisY3->setTitleText("SwapUsage(%)");
+    chart3->addAxis(axisX3, Qt::AlignBottom);
+    chart3->addAxis(axisY3, Qt::AlignLeft);
+    chart3->addSeries(series_swap);
+
+    updateChart();
 }
 void MainWindow::initCPUInfo() {
     QFile file_cpuUsage("/proc/stat");
@@ -140,5 +226,5 @@ void MainWindow::initCPUInfo() {
 
 void MainWindow::on_pushButton_shutdown_clicked()
 {
-    system("shutdown -h now");
+    system("shutdown -h 1");
 }
